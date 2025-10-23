@@ -260,7 +260,7 @@
 
     function startTimer(){
       clearInterval(interval);
-      t=2; timer.textContent=t+"s";
+      t=10; timer.textContent=t+"s";
       interval=setInterval(()=>{
         t--; timer.textContent=t+"s";
         if(t<=0){ clearInterval(interval); if(!flipped) flip(); }
@@ -315,3 +315,4 @@
   </script>
 </body>
 </html>
+
