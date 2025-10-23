@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flashcards – Probabilidad (dados y baraja)</title>
+
+  <!-- MathJax (salida SVG, estilo LaTeX) -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(','\\)'],['$','$']],
+        displayMath: [['\\[','\\]'],['$$','$$']],
+        processEscapes: true,
+        processEnvironments: true,
+        packages: { '[+]': ['ams'] }
+      },
+      svg: { fontCache: 'global' },
+      startup: { typeset: false, output: "svg" }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js"></script>
+
+  <style>
+    :root{
+      --primary:#5b21b6; --primaryL:#8b5cf6; --secondary:#059669; --accent:#f97316;
+      --bg:#f3f4f6; --card:#fff; --text:#1f2937; --text2:#6b7280;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;font-family:Segoe UI, Tahoma, sans-serif}
+    body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .container{width:100%;max-width:880px;background:var(--card);border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,.1);padding:22px}
+    h1{color:var(--primary);font-size:2.2rem;text-align:center;margin-bottom:.6rem}
+    h2{color:var(--primary);font-size:1.4rem;margin-bottom:.4rem}
+    p{color:var(--text2)}
+    .welcome,.done{text-align:center;padding:24px}
+    .button{background:var(--primary);color:#fff;border:none;padding:11px 22px;border-radius:30px;font-weight:700;cursor:pointer;transition:.2s;margin:8px;box-shadow:0 4px 10px rgba(0,0,0,.1)}
+    .button:hover{background:var(--primaryL);transform:translateY(-2px)}
+    .flip{background:var(--accent)}
+    .flip:hover{background:#ea580c}
+    .deck{width:100%;height:350px;perspective:1000px;margin:18px 0;display:none}
+    .card{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform .8s}
+    .card.flipped{transform:rotateY(180deg)}
+    .side{position:absolute;width:100%;height:100%;backface-visibility:hidden;border-radius:16px;padding:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:0 4px 10px rgba(0,0,0,.08)}
+    .front{background:#e0e7ff;border-left:8px solid var(--primary)}
+    .back{background:#dcfce7;border-left:8px solid var(--secondary);transform:rotateY(180deg)}
+    .card-content{font-size:1.18rem;margin-top:10px}
+    .nav{display:none;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .timer{color:var(--text2);font-weight:700}
+    .count{width:100%;text-align:center;color:var(--text2);margin:8px 0}
+    .barWrap{display:none;width:100%;height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden;margin-top:10px}
+    .bar{height:100%;background:var(--primary);width:0%;transition:width .5s}
+    @media(max-width:640px){.deck{height:300px}}
+    .confetti{position:fixed;width:10px;height:10px;border-radius:50%;animation:fall 5s ease-out forwards;z-index:-1}
+    @keyframes fall{0%{transform:translateY(-100vh) rotate(0);opacity:1}100%{transform:translateY(100vh) rotate(360deg);opacity:0}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Bienvenida -->
+    <div class="welcome" id="welcome">
+      <h1>Flashcards de Probabilidad 🎲</h1>
+      <p>Repasa conceptos clave: experimentos aleatorios, sucesos, operaciones con sucesos, Regla de Laplace y propiedades de la probabilidad (dados y baraja española).</p>
+      <p>Cada tarjeta se muestra por <b>10 segundos</b> antes de revelar la respuesta.</p>
+      <button class="button" id="start">¡Empezar!</button>
+    </div>
+
+    <!-- Tarjeta -->
+    <div class="deck" id="deck">
+      <div class="card" id="card">
+        <div class="side front">
+          <h2 id="q-title">Pregunta</h2>
+          <div class="card-content" id="q-content">—</div>
+        </div>
+        <div class="side back">
+          <h2 id="a-title">Respuesta</h2>
+          <div class="card-content" id="a-content">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navegación -->
+    <div class="nav" id="nav">
+      <span class="timer" id="timer">10s</span>
+      <div class="count" id="count">Tarjeta 1 de 10</div>
+      <div>
+        <button class="button" id="prev" disabled>Anterior</button>
+        <button class="button flip" id="flip">Voltear</button>
+        <button class="button" id="next">Siguiente</button>
+      </div>
+    </div>
+    <div class="barWrap" id="barWrap"><div class="bar" id="bar"></div></div>
+
+    <!-- Final -->
+    <div class="done" id="done" style="display:none">
+      <h1>¡Repaso completado! 🎉</h1>
+      <p>Has revisado los conceptos fundamentales. ¿Otra ronda?</p>
+      <button class="button" id="restart">Volver a empezar</button>
+    </div>
+  </div>
+
+  <script>
+    // MathJax helper
+    const typeset = el => (window.MathJax?.typesetPromise?.([el]) ?? Promise.resolve());
+
+    // 10 Flashcards conceptuales (contenido de las páginas)
+    const CARDS = [
+      {
+        qTitle: "Experimento aleatorio y espacio muestral",
+        q: `Define experimento aleatorio y escribe el espacio muestral al lanzar un dado de 6 caras.`,
+        aTitle: "Definición y ejemplo",
+        a: `
+          Un <b>experimento aleatorio</b> es aquel cuyo resultado no puede predecirse con certeza.<br>
+          El <b>espacio muestral</b> es el conjunto de todos los resultados posibles:<br>
+          $$E=\\{1,2,3,4,5,6\\}.$$
+        `
+      },
+      {
+        qTitle: "Tipos de sucesos",
+        q: `¿Qué es un suceso <i>elemental</i>, <i>compuesto</i>, <i>imposible</i> y <i>seguro</i>?`,
+        aTitle: "Conceptos",
+        a: `
+          Elemental: contiene <b>un</b> único resultado (p.ej., $\\{4\\}$).<br>
+          Compuesto: contiene <b>dos o más</b> resultados (p.ej., pares $\\{2,4,6\\}$).<br>
+          Imposible: $\\varnothing$ (no ocurre nunca).<br>
+          Seguro: coincide con $E$ (ocurre siempre).
+        `
+      },
+      {
+        qTitle: "Compatibles vs. incompatibles",
+        q: `Explica cuándo dos sucesos son compatibles o incompatibles.`,
+        aTitle: "Definición y ejemplos",
+        a: `
+          <b>Compatibles</b>: pueden ocurrir a la vez (intersección no vacía).<br>
+          Ej.: “oros” y “figura” en baraja española: $A\\cap F\\neq\\varnothing$.<br><br>
+          <b>Incompatibles</b>: no pueden ocurrir simultáneamente (intersección vacía).<br>
+          Ej.: “oros” y “copas”: $A\\cap C=\\varnothing$.
+        `
+      },
+      {
+        qTitle: "Operaciones con sucesos",
+        q: `Define unión, intersección y suceso contrario.`,
+        aTitle: "Notación en conjuntos",
+        a: `
+          <b>Unión</b>: $A\\cup B$ (ocurre $A$ <i>o</i> $B$).<br>
+          <b>Intersección</b>: $A\\cap B$ (ocurren ambos).<br>
+          <b>Contrario</b>: $\\overline{A}=E\\setminus A$.<br>
+          <b>Propiedades</b>: $A\\cup\\overline{A}=E$ y $A\\cap\\overline{A}=\\varnothing$.
+        `
+      },
+      {
+        qTitle: "Leyes de De Morgan",
+        q: `Enuncia las leyes de De Morgan para sucesos.`,
+        aTitle: "Formulación",
+        a: `
+          $$\\overline{A\\cup B}=\\overline{A}\\cap\\overline{B}$$
+          $$\\overline{A\\cap B}=\\overline{A}\\cup\\overline{B}$$
+        `
+      },
+      {
+        qTitle: "Equiprobabilidad y Regla de Laplace",
+        q: `¿Cuándo se aplica Laplace y cuál es su fórmula?`,
+        aTitle: "Criterio y fórmula",
+        a: `
+          Si los casos elementales son <b>equiprobables</b>, entonces:<br>
+          $$P(A)=\\dfrac{\\text{n.º de casos favorables}}{\\text{n.º de casos posibles}}.$$
+          Ej.: en un dado, $P(\\text{número}>4)=\\dfrac{2}{6}=\\dfrac{1}{3}$.
+        `
+      },
+      {
+        qTitle: "Cotas básicas de la probabilidad",
+        q: `Indica las cotas y valores extremos de la probabilidad.`,
+        aTitle: "Propiedades",
+        a: `
+          Para todo suceso $A$:<br>
+          $$0\\le P(A)\\le 1,\\qquad P(E)=1,\\qquad P(\\varnothing)=0.$$
+        `
+      },
+      {
+        qTitle: "Suma de probabilidades (incompatibles)",
+        q: `Escribe la regla para la unión de sucesos incompatibles y da un ejemplo con la baraja.`,
+        aTitle: "Regla + ejemplo",
+        a: `
+          Si $A$ y $B$ son <b>incompatibles</b>: $$P(A\\cup B)=P(A)+P(B).$$
+          Ej.: “oros” (10/40) o “copas” (10/40): $$P=\\dfrac{10}{40}+\\dfrac{10}{40}=\\dfrac{20}{40}=\\dfrac{2}{4}=\\dfrac{1}{2}.$$
+        `
+      },
+      {
+        qTitle: "Suma con intersección (compatibles)",
+        q: `Da la fórmula de inclusión–exclusión y ejemplifica con “oros o figura”.`,
+        aTitle: "Fórmula + ejemplo",
+        a: `
+          Si $A$ y $B$ son <b>compatibles</b>: $$P(A\\cup B)=P(A)+P(B)-P(A\\cap B).$$
+          En baraja: oros (10), figuras (12) y 3 figuras de oros:
+          $$P=\\dfrac{10}{40}+\\dfrac{12}{40}-\\dfrac{3}{40}=\\dfrac{19}{40}.$$
+        `
+      },
+      {
+        qTitle: "Probabilidad del suceso contrario",
+        q: `¿Cómo calcular $P(\\overline{A})$? Ejemplo: “no sacar figura”.`,
+        aTitle: "Regla del complemento",
+        a: `
+          $$P(\\overline{A})=1-P(A).$$
+          En baraja: $P(\\text{figura})=\\tfrac{12}{40}$, por tanto
+          $$P(\\text{no figura})=1-\\dfrac{12}{40}=\\dfrac{40}{40}-\\dfrac{12}{40}=\\dfrac{28}{40}=\\dfrac{7}{10}.$$
+        `
+      }
+    ];
+
+    // ---- Estado y referencias ----
+    let idx = 0, flipped = false, t=10, interval;
+    const welcome = document.getElementById("welcome");
+    const deck = document.getElementById("deck");
+    const nav = document.getElementById("nav");
+    const barWrap = document.getElementById("barWrap");
+    const done = document.getElementById("done");
+    const card = document.getElementById("card");
+    const qTitle = document.getElementById("q-title");
+    const qContent = document.getElementById("q-content");
+    const aTitle = document.getElementById("a-title");
+    const aContent = document.getElementById("a-content");
+    const timer = document.getElementById("timer");
+    const count = document.getElementById("count");
+    const bar = document.getElementById("bar");
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+    const flipBtn = document.getElementById("flip");
+    const start = document.getElementById("start");
+    const restart = document.getElementById("restart");
+
+    const typesetDeck = () => typeset(document.querySelector(".deck"));
+
+    function showConfetti(){
+      const colors=['#f00','#ff0','#0f0','#0ff','#00f','#f0f'];
+      for(let i=0;i<80;i++){
+        const c=document.createElement('div');
+        c.className='confetti';
+        c.style.left=Math.random()*100+'%';
+        c.style.width=(Math.random()*8+4)+'px';
+        c.style.height=c.style.width;
+        c.style.backgroundColor=colors[Math.floor(Math.random()*colors.length)];
+        c.style.animationDuration=(Math.random()*3+2)+'s';
+        document.body.appendChild(c);
+        setTimeout(()=>document.body.removeChild(c),5000);
+      }
+    }
+
+    function loadCard(i){
+      const C = CARDS[i];
+      flipped=false; card.classList.remove("flipped");
+      qTitle.textContent = C.qTitle;
+      qContent.innerHTML = C.q;
+      aTitle.textContent = C.aTitle;
+      aContent.innerHTML = C.a;
+      count.textContent = `Tarjeta ${i+1} de ${CARDS.length}`;
+      prev.disabled = (i===0);
+      updateProgress();
+      typesetDeck();
+      startTimer(); // 10 s para pensar
+    }
+
+    function startTimer(){
+      clearInterval(interval);
+      t=2; timer.textContent=t+"s";
+      interval=setInterval(()=>{
+        t--; timer.textContent=t+"s";
+        if(t<=0){ clearInterval(interval); if(!flipped) flip(); }
+      },1000);
+    }
+
+    function flip(){
+      flipped=!flipped;
+      card.classList.toggle("flipped");
+      if(flipped){ clearInterval(interval); typesetDeck(); }
+      else{ startTimer(); }
+    }
+
+    function nextCard(){
+      if(idx < CARDS.length-1){ idx++; loadCard(idx); }
+      else { finish(); }
+    }
+
+    function prevCard(){ if(idx>0){ idx--; loadCard(idx); } }
+
+    function updateProgress(){
+      const p = ((idx+1)/CARDS.length)*100;
+      bar.style.width = p+"%";
+    }
+
+    function startDeck(){
+      welcome.style.display="none";
+      done.style.display="none";
+      deck.style.display="block";
+      nav.style.display="flex";
+      barWrap.style.display="block";
+      idx=0; loadCard(0);
+    }
+
+    function finish(){
+      clearInterval(interval);
+      deck.style.display="none";
+      nav.style.display="none";
+      barWrap.style.display="none";
+      done.style.display="block";
+      showConfetti();
+    }
+
+    // Listeners
+    start.addEventListener("click", startDeck);
+    restart.addEventListener("click", startDeck);
+    flipBtn.addEventListener("click", flip);
+    next.addEventListener("click", nextCard);
+    prev.addEventListener("click", prevCard);
+
+    document.addEventListener("DOMContentLoaded", ()=> typeset(document.body));
+  </script>
+</body>
+</html>
